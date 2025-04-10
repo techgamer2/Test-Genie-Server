@@ -77,6 +77,20 @@ const UserSchema = new mongoose_1.Schema({
         type: Number,
         default: 0
     },
+    totalCompletionTime: {
+        type: Number,
+        default: 0
+    },
+    avgCompletionTime: {
+        type: Number,
+        default: 0
+    },
+    resetPasswordToken: {
+        type: String
+    },
+    resetPasswordExpires: {
+        type: Number
+    },
     createdAt: {
         type: Date,
         default: Date.now

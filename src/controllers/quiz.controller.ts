@@ -13,13 +13,25 @@ import { getRandomQuestions, hasQuestionsForSubject, getAvailableSubjects } from
 const generateMockQuestions = (subject: string, numQuestions: number = 10, difficulty: string = 'medium'): any[] => {
   // First check if we have predefined questions for this subject
   if (hasQuestionsForSubject(subject)) {
-    return getRandomQuestions(subject, numQuestions, difficulty as 'easy' | 'medium' | 'hard');
+    const questions = getRandomQuestions(subject, numQuestions, difficulty as 'easy' | 'medium' | 'hard');
+    if (questions.length === numQuestions) {
+      return questions;
+    }
   }
   
-  // Fall back to existing mock questions if subject not in predefined list
   // Sample questions by subject
   const questionsBySubject: Record<string, any[]> = {
     'Mathematics': [
+      {
+        text: 'What is 2 + 2?',
+        options: [
+          { text: '3', isCorrect: false },
+          { text: '4', isCorrect: true },
+          { text: '5', isCorrect: false },
+          { text: '6', isCorrect: false }
+        ],
+        explanation: '2 + 2 equals 4 because when you add two units to another two units, you get four units.'
+      },
       {
         text: 'What is the value of π (pi) to two decimal places?',
         options: [
@@ -218,7 +230,8 @@ const generateMockQuestions = (subject: string, numQuestions: number = 10, diffi
         { text: 'Historical development', isCorrect: false },
         { text: 'Modern applications', isCorrect: false },
         { text: 'Theoretical frameworks', isCorrect: false }
-      ]
+      ],
+      explanation: 'Fundamental principles form the foundation of any subject and are essential for understanding its core concepts.'
     },
     {
       text: `Who is considered the founder of ${subject}?`,
@@ -305,81 +318,93 @@ const generateMockQuestions = (subject: string, numQuestions: number = 10, diffi
 // Generate a quiz from a subject
 export const generateQuiz = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'User not authenticated'
-      });
+    const { subject, numQuestions, difficulty } = req.body;
+
+    if (!subject || !numQuestions) {
+      return res.status(400).json({ error: 'Subject and number of questions are required' });
     }
 
-    const { subject, numQuestions = 10, difficulty = 'medium' } = req.body;
-
-    if (!subject) {
-      return res.status(400).json({
-        success: false,
-        message: 'Subject is required'
-      });
-    }
-
-    console.log('Generating quiz:', { subject, numQuestions, difficulty });
-
-    let questions;
+    // Try to generate quiz using Groq
     try {
-      // Try to generate questions using AI
-      const aiResponse = await generateQuizWithGroq(subject, numQuestions, difficulty);
-      console.log('AI response received:', aiResponse);
-
-      if (!aiResponse || !Array.isArray(aiResponse.questions)) {
-        console.error('Invalid AI response format:', aiResponse);
-        throw new Error('Invalid AI response format');
-      }
-
-      questions = aiResponse.questions;
-    } catch (aiError) {
-      console.error('AI generation failed:', aiError);
+      // Request more questions than needed to ensure we have enough
+      const bufferQuestions = Math.ceil(numQuestions * 1.2); // Request 20% more questions
+      const generatedQuiz = await generateQuizWithGroq(subject, bufferQuestions, difficulty);
       
-      // Fall back to predefined questions
-      try {
-        const predefinedQuestions = getRandomQuestions(subject, numQuestions, difficulty);
-        if (predefinedQuestions && predefinedQuestions.length > 0) {
-          console.log('Using predefined questions');
-          questions = predefinedQuestions;
-        } else {
-          // If no predefined questions, use mock questions
-          console.log('Using mock questions');
-          questions = generateMockQuestions(numQuestions);
-        }
-      } catch (fallbackError) {
-        console.error('Fallback question generation failed:', fallbackError);
-        throw fallbackError;
+      // Trim to exactly the requested number of questions
+      const trimmedQuestions = generatedQuiz.questions.slice(0, numQuestions);
+      
+      // Create new quiz with trimmed questions
+      const newQuiz = new Quiz({
+        subject,
+        difficulty,
+        questions: trimmedQuestions,
+        createdBy: req.user?.id || null,
+        isAI: true,
+        title: `${subject} Quiz - ${difficulty}`,
+        userId: req.user?.id || null
+      });
+      
+      await newQuiz.save();
+      return res.status(201).json({
+        success: true,
+        message: 'Quiz generated successfully',
+        quiz: newQuiz
+      });
+    } catch (error: any) {
+      console.error('Groq generation failed:', error);
+      
+      // Check if it's a rate limit error
+      if (error?.status === 429) {
+        console.log('Rate limit reached, falling back to predefined questions');
+      } else {
+        console.error('Error details:', error);
       }
+      
+      // Continue to fallback logic
     }
 
-    // Create the quiz in the database
-    const quiz = new Quiz({
-      title: `${subject} Quiz`,
-      subject,
-      questions,
-      difficulty,
-      userId: userId
-    });
+    // Fallback to predefined questions
+    try {
+      // Get more questions than needed
+      const bufferQuestions = Math.ceil(numQuestions * 1.2);
+      const questions = await getRandomQuestions(subject, bufferQuestions);
+      
+      if (questions.length === 0) {
+        return res.status(400).json({ 
+          success: false,
+          message: 'No questions available for this subject' 
+        });
+      }
 
-    const savedQuiz = await quiz.save();
-    console.log('Quiz saved successfully:', { quizId: savedQuiz._id });
+      // Trim to exactly the requested number of questions
+      const trimmedQuestions = questions.slice(0, numQuestions);
 
-    return res.status(201).json({
-      success: true,
-      message: 'Quiz generated successfully',
-      data: savedQuiz
-    });
+      const newQuiz = new Quiz({
+        subject,
+        difficulty,
+        questions: trimmedQuestions,
+        createdBy: req.user?.id || null,
+        isAI: false,
+        title: `${subject} Quiz - ${difficulty}`,
+        userId: req.user?.id || null
+      });
 
-  } catch (error: any) {
+      await newQuiz.save();
+      return res.status(201).json({
+        success: true,
+        message: 'Quiz generated successfully using predefined questions',
+        quiz: newQuiz
+      });
+    } catch (error) {
+      console.error('Error creating quiz with predefined questions:', error);
+      return res.status(500).json({ 
+        success: false,
+        message: 'Failed to create quiz' 
+      });
+    }
+  } catch (error) {
     console.error('Error generating quiz:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to generate quiz'
-    });
+    return res.status(500).json({ error: 'Failed to generate quiz' });
   }
 };
 

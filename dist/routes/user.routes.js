@@ -10,7 +10,7 @@ const router = express_1.default.Router();
 // Get leaderboard
 router.get('/leaderboard', user_controller_1.getLeaderboard);
 // Get user profile
-router.get('/profile', auth_middleware_1.authenticateToken, user_controller_1.getUserProfile);
+router.get('/profile', auth_middleware_1.authenticateToken, user_controller_1.getProfile);
 // Update user profile
 router.put('/profile', auth_middleware_1.authenticateToken, user_controller_1.updateUserProfile);
 exports.default = router;

@@ -17,9 +17,14 @@ const user_routes_1 = __importDefault(require("./routes/user.routes"));
 dotenv_1.default.config();
 // Create Express app
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 // Middleware
-app.use((0, cors_1.default)());
+app.use((0, cors_1.default)({
+    origin: 'http://localhost:5173', // Your client's URL
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express_1.default.json({ limit: '50mb' }));
 app.use(express_1.default.urlencoded({ limit: '50mb', extended: true }));
 app.use((0, morgan_1.default)('dev'));
@@ -41,6 +46,8 @@ if (process.env.NODE_ENV === 'production') {
     });
 }
 // Start server
-app.listen(PORT, () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
+    console.log(`Server accessible at http://localhost:${PORT}`);
+    console.log('To access from another device, use your computer\'s IP address');
 });

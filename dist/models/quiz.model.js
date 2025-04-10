@@ -114,6 +114,13 @@ const QuizSchema = new mongoose_1.Schema({
     },
     userAnswers: {
         type: [String]
+    },
+    completionTime: {
+        type: Number
+    },
+    attempts: {
+        type: Number,
+        default: 0
     }
 });
 exports.default = mongoose_1.default.model('Quiz', QuizSchema);

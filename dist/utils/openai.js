@@ -15,12 +15,48 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateQuizFromText = exports.generateExplanation = exports.generateQuizWithAI = void 0;
 const openai_1 = __importDefault(require("openai"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 dotenv_1.default.config();
+// Debug: Log the OpenAI API key format (first and last 4 chars)
+const apiKey = process.env.OPENAI_API_KEY;
+if (apiKey) {
+    const keyLength = apiKey.length;
+    const maskedKey = apiKey.substring(0, 4) + '...' + apiKey.substring(keyLength - 4);
+    console.log(`OpenAI API Key loaded [${maskedKey}], length: ${keyLength}`);
+}
+else {
+    console.error('OpenAI API Key not found in environment variables!');
+    // For debugging: Try to read the .env file directly
+    try {
+        const envPath = path_1.default.resolve(process.cwd(), '.env');
+        console.log(`Attempting to read .env file from: ${envPath}`);
+        if (fs_1.default.existsSync(envPath)) {
+            const envContent = fs_1.default.readFileSync(envPath, 'utf8');
+            const lines = envContent.split('\n');
+            const openaiKeyLine = lines.find(line => line.startsWith('OPENAI_API_KEY='));
+            if (openaiKeyLine) {
+                console.log('Found OPENAI_API_KEY in .env file');
+            }
+            else {
+                console.log('OPENAI_API_KEY not found in .env file');
+            }
+        }
+        else {
+            console.log('.env file not found');
+        }
+    }
+    catch (error) {
+        console.error('Error reading .env file:', error);
+    }
+}
 const openai = new openai_1.default({
     apiKey: process.env.OPENAI_API_KEY,
 });
 const generateQuizWithAI = (subject, numQuestions) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
+        console.log(`Generating quiz about "${subject}" with ${numQuestions} questions...`);
         const prompt = `Generate a quiz about ${subject} with ${numQuestions} multiple-choice questions. 
 Each question should have 4 options with only one correct answer.
 Format the response as a valid JSON with the following structure:
@@ -38,6 +74,7 @@ Format the response as a valid JSON with the following structure:
     }
   ]
 }`;
+        console.log('Sending request to OpenAI...');
         const completion = yield openai.chat.completions.create({
             messages: [{ role: 'user', content: prompt }],
             model: 'gpt-3.5-turbo',
@@ -48,7 +85,10 @@ Format the response as a valid JSON with the following structure:
         if (!responseContent) {
             throw new Error('Failed to generate quiz content');
         }
-        return JSON.parse(responseContent);
+        console.log('Successfully received response from OpenAI');
+        const parsedResponse = JSON.parse(responseContent);
+        console.log(`Generated ${((_a = parsedResponse.questions) === null || _a === void 0 ? void 0 : _a.length) || 0} questions`);
+        return parsedResponse;
     }
     catch (error) {
         console.error('Error generating quiz with OpenAI:', error);
