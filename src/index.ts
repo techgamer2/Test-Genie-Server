@@ -29,6 +29,14 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(morgan('dev'));
 
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Test Genie API is running',
+    status: 'healthy',
+    version: '1.0.0'
+  });
+});
+
 // Connect to MongoDB
 mongoose
   .connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test-genie')
